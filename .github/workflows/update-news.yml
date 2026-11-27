@@ -1,0 +1,53 @@
+name: R! News Hourly Update
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Load previous news.json from data branch
+        run: |
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git fetch origin data
+            git show origin/data:news.json > prev_news.json || echo "{}" > prev_news.json
+          else
+            echo "{}" > prev_news.json
+          fi
+
+      - name: Run R! News Scraper
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node scripts/fetch_news.mjs
+
+      - name: Publish news.json to data branch
+        run: |
+          git config user.name "R! News Bot"
+          git config user.email "bot@r-news.local"
+          mkdir -p /tmp/data-publish
+          cp news.json /tmp/data-publish/news.json
+          rm -f prev_news.json news.json
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git checkout -B data origin/data
+          else
+            git checkout --orphan data
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+          cp /tmp/data-publish/news.json news.json
+          git add news.json
+          git commit -m "Update news.json $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "No changes"
+          git push origin data
