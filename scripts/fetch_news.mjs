@@ -32,6 +32,12 @@ const BREAKING_VIP_KEYWORDS = [
 
 const HIGH_ALERT_BREAKING_REGEX = /(^突發|^【突發】|^快訊|^【快訊】|突發[｜|:：！!\s]|快訊[｜|:：！!\s]|三級火|四級火|五級火|黑雨|黑色暴雨|紅雨|紅色暴雨|八號烈風|八號風球|九號烈風|九號風球|十號颶風|十號風球|極端情況|大地震|海嘯警報|恐襲|恐怖襲擊|空難|墜機|槍擊案|嚴重車禍|連環相撞|全線停駛|港鐵故障|宣佈停課|宣布停課|戒嚴|宣戰|導彈襲擊|空襲|遇刺|爆炸案|大樓倒塌|塌樓|墮海|沉船)/i;
 
+const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+
+let geminiDisabled = false;
+let geminiFailCount = 0;
+let edgeTokenCache = null;
+
 function getHkParts(ts) {
   const d = new Date(ts + 8 * 60 * 60 * 1000);
   const pad = n => String(n).padStart(2, "0");
@@ -228,7 +234,10 @@ function getNewsSourcesConfig() {
     { category: "港聞", sourceName: "Now 新聞", statGroup: "Now 新聞", url: "https://www.bing.com/news/search?q=site:news.now.com+%E9%A6%99%E6%B8%AF&setmkt=zh-HK&format=rss", maxCount: 10, priority: 12 },
     { category: "港聞", sourceName: "Now 新聞", statGroup: "Now 新聞", url: "https://news.google.com/rss/search?q=site:news.now.com+%E6%B8%AF%E8%81%9E+when:1d&hl=zh-HK&gl=HK&ceid=HK:zh-Hant", maxCount: 6, priority: 11 },
     { category: "港聞", sourceName: "香港01", statGroup: "香港01", url: "https://www.bing.com/news/search?q=site:hk01.com+(%E6%B8%AF%E8%81%9E+OR+%E7%AA%81%E7%99%BC+OR+%E7%A4%BE%E6%9C%83%E6%96%B0%E8%81%9E+OR+%E6%94%BF%E6%83%85)&setmkt=zh-HK&format=rss", maxCount: 12, priority: 12 },
+    // 集誌社：直連 + Bing / Google News 雙中轉防雲端封鎖
     { category: "港聞", sourceName: "集誌社", statGroup: "集誌社", url: "https://thecollectivehk.com/feed/", maxCount: 6, priority: 11 },
+    { category: "港聞", sourceName: "集誌社", statGroup: "集誌社", url: "https://www.bing.com/news/search?q=site:thecollectivehk.com&setmkt=zh-HK&format=rss", maxCount: 6, priority: 11 },
+    { category: "港聞", sourceName: "集誌社", statGroup: "集誌社", url: "https://news.google.com/rss/search?q=site:thecollectivehk.com+when:2d&hl=zh-HK&gl=HK&ceid=HK:zh-Hant", maxCount: 6, priority: 11 },
     { category: "港聞", sourceName: "獨立媒體", statGroup: "獨立媒體", url: "https://www.inmediahk.net/rss.xml", maxCount: 6, priority: 11 },
     { category: "港聞", sourceName: "商業電台", statGroup: "商業電台", url: "https://www.bing.com/news/search?q=site:881903.com+%E6%B8%AF%E8%81%9E&setmkt=zh-HK&format=rss", maxCount: 6, priority: 10 },
     { category: "港聞", sourceName: "商業電台", statGroup: "商業電台", url: "https://www.bing.com/news/search?q=site:hk.news.yahoo.com+%E5%95%86%E5%8F%B0%E6%96%B0%E8%81%9E+%E9%A6%99%E6%B8%AF&setmkt=zh-HK&format=rss", maxCount: 6, priority: 10 },
@@ -261,7 +270,7 @@ function getNewsSourcesConfig() {
     { category: "娛樂", sourceName: "壹蘋娛樂", statGroup: "壹蘋新聞網", url: "https://news.google.com/rss/search?q=site:tw.nextapple.com+%E5%A8%9B%E6%A8%82+when:1d&hl=zh-TW&gl=TW&ceid=TW:zh-Hant", maxCount: 6, priority: 10 },
     { category: "娛樂", sourceName: "自由娛樂", statGroup: "自由時報", url: "https://news.ltn.com.tw/rss/entertainment.xml", maxCount: 6, priority: 10 },
 
-    // ⚽ 體育（已順手修正足球焦點歸類至香港01）
+    // ⚽ 體育
     { category: "體育", sourceName: "足球焦點", statGroup: "香港01", url: "https://www.bing.com/news/search?q=(%E8%8B%B1%E8%B6%85+OR+%E8%A5%BF%E7%94%B2+OR+%E6%AD%90%E5%86%A0+OR+%E4%B8%96%E7%95%8C%E7%9B%83)+site:hk01.com&setmkt=zh-HK&format=rss", maxCount: 6, priority: 12 },
     { category: "體育", sourceName: "NBA 戰報", statGroup: "香港01", url: "https://www.bing.com/news/search?q=NBA+site:hk01.com&setmkt=zh-HK&format=rss", maxCount: 6, priority: 12 },
     { category: "體育", sourceName: "體壇及港隊", statGroup: "香港01", url: "https://www.bing.com/news/search?q=(%E6%B8%AF%E9%9A%8A+OR+%E5%BC%B5%E5%AE%B6%E6%9C%97+OR+%E4%BD%95%E8%A9%A9%E8%93%93+OR+%E7%B6%B2%E7%90%83+OR+F1+OR+%E7%BE%BD%E6%AF%9B%E7%90%83+OR+%E6%A1%8C%E7%90%83)+site:hk01.com&setmkt=zh-HK&format=rss", maxCount: 6, priority: 11 },
@@ -598,7 +607,7 @@ async function resolveGoogleNewsUrls(items) {
 
   const pageReqs = gnewsTargets.map(t => ({
     url: t.url,
-    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+    headers: { "User-Agent": BROWSER_UA }
   }));
   const pageResponses = await fetchBatch(pageReqs, 10, 10000);
 
@@ -617,7 +626,7 @@ async function resolveGoogleNewsUrls(items) {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          "User-Agent": BROWSER_UA
         },
         body: "f.req=" + encodeURIComponent(JSON.stringify(fReq))
       });
@@ -653,7 +662,7 @@ async function enrichArticlesDeepContent(items, nowMs) {
   const requests = targets.map(t => ({
     url: t.url,
     headers: {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+      "User-Agent": BROWSER_UA,
       "Accept-Language": "zh-HK,zh-TW;q=0.9,zh;q=0.8,en;q=0.7"
     }
   }));
@@ -894,72 +903,184 @@ function extractGoogleNewsClusterSubtitles(descHtml, mainTitle) {
   return lines.join("\n\n");
 }
 
+// 翻譯引擎 1：Gemini（自動識別 Vertex AI 的 AQ. 金鑰與 AI Studio 金鑰）
 async function translateWithGemini(text) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || !text) return "";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const res = await safeFetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: "請將以下英文新聞準確翻譯為香港新聞常用的繁體中文書面語，保留原本的段落換行，只輸出譯文，不要加入任何前綴、註解或標題：\n\n" + text
-        }]
+  const apiKey = (process.env.GEMINI_API_KEY || "").trim();
+  if (!apiKey || !text || geminiDisabled) return "";
+
+  const endpoints = apiKey.startsWith("AQ.")
+    ? [
+        `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`,
+        `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`
+      ]
+    : [
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`
+      ];
+
+  const payload = JSON.stringify({
+    contents: [{
+      role: "user",
+      parts: [{
+        text: "請將以下英文新聞準確翻譯為香港新聞常用的繁體中文書面語，保留原本段落換行，只輸出譯文，不要加入任何前綴、註解或標題：\n\n" + text
       }]
-    })
-  }, 15000);
-  if (res.status !== 200) return "";
-  try {
-    const data = JSON.parse(res.text);
-    const out = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-    return /[\u4e00-\u9fa5]/.test(out) ? out : "";
-  } catch (e) {
-    return "";
+    }]
+  });
+
+  for (const url of endpoints) {
+    const res = await safeFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload
+    }, 15000);
+
+    if (res.status === 200) {
+      try {
+        const data = JSON.parse(res.text);
+        const out = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+        if (/[\u4e00-\u9fa5]/.test(out)) {
+          geminiFailCount = 0;
+          return out;
+        }
+      } catch (e) {}
+    } else {
+      console.log(`[Translate:Gemini] status=${res.status}`);
+    }
   }
+
+  geminiFailCount++;
+  if (geminiFailCount >= 2) {
+    geminiDisabled = true;
+    console.log("[Translate:Gemini] disabled for remaining run, switching to Edge/GTX");
+  }
+  return "";
 }
 
+// 翻譯引擎 2：微軟 Edge 免 Key 繁中翻譯（Azure / GitHub Actions 機房最穩定）
+async function getEdgeTranslateToken() {
+  if (edgeTokenCache) return edgeTokenCache;
+  const res = await safeFetch("https://edge.microsoft.com/translate/auth", {
+    headers: { "User-Agent": BROWSER_UA }
+  }, 10000);
+  if (res.status === 200 && res.text && res.text.trim().length > 20) {
+    edgeTokenCache = res.text.trim();
+    return edgeTokenCache;
+  }
+  console.log(`[Translate:EdgeAuth] status=${res.status}`);
+  return "";
+}
+
+async function translateWithEdge(text) {
+  if (!text) return "";
+  const token = await getEdgeTranslateToken();
+  if (!token) return "";
+
+  const chunks = [];
+  if (text.length <= 3800) {
+    chunks.push(text);
+  } else {
+    const paras = text.split(/\n\n+/);
+    let buf = "";
+    for (const p of paras) {
+      if ((buf + "\n\n" + p).length > 3800 && buf) {
+        chunks.push(buf);
+        buf = p;
+      } else {
+        buf = buf ? buf + "\n\n" + p : p;
+      }
+    }
+    if (buf) chunks.push(buf);
+  }
+
+  const outParts = [];
+  for (const ch of chunks) {
+    const res = await safeFetch(
+      "https://api-edge.cognitive.microsofttranslator.com/translate?from=en&to=zh-Hant&api-version=3.0",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json",
+          "User-Agent": BROWSER_UA
+        },
+        body: JSON.stringify([{ Text: ch }])
+      },
+      12000
+    );
+    if (res.status === 200) {
+      try {
+        const data = JSON.parse(res.text);
+        const tr = data?.[0]?.translations?.[0]?.text || "";
+        if (/[\u4e00-\u9fa5]/.test(tr)) {
+          outParts.push(tr);
+          continue;
+        }
+      } catch (e) {}
+    } else {
+      console.log(`[Translate:Edge] status=${res.status}`);
+      return "";
+    }
+  }
+  return outParts.join("\n\n");
+}
+
+// 翻譯引擎 3：Google GTX 免 Key 保底（附瀏覽器標頭）
 async function translateWithGtx(text) {
   if (!text) return "";
   const paras = text.split(/\n\n+/);
   const translated = [];
+  let anyChinese = false;
   for (const p of paras) {
     const chunk = p.trim();
     if (!chunk) continue;
-    const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=" + encodeURIComponent(chunk.slice(0, 1800));
-    const res = await safeFetch(url, {}, 10000);
+    const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=" + encodeURIComponent(chunk.slice(0, 1500));
+    const res = await safeFetch(url, {
+      headers: { "User-Agent": BROWSER_UA }
+    }, 10000);
     if (res.status === 200) {
       try {
         const data = JSON.parse(res.text);
         if (data && data[0]) {
-          translated.push(data[0].map(seg => seg[0] || "").join(""));
+          const out = data[0].map(seg => seg[0] || "").join("");
+          if (/[\u4e00-\u9fa5]/.test(out)) anyChinese = true;
+          translated.push(out);
           continue;
         }
       } catch (e) {}
     }
     translated.push(chunk);
   }
-  return translated.join("\n\n");
+  return anyChinese ? translated.join("\n\n") : "";
 }
 
 async function translateTextWithFallback(text) {
   if (!text) return "";
   const geminiRes = await translateWithGemini(text);
   if (geminiRes) return geminiRes;
+
+  const edgeRes = await translateWithEdge(text);
+  if (edgeRes) return edgeRes;
+
   const gtxRes = await translateWithGtx(text);
-  return gtxRes || text;
+  if (gtxRes) return gtxRes;
+
+  return text;
 }
 
 async function translateForeignArticles(items, previousPayload) {
   const prevCache = new Map();
   if (previousPayload && Array.isArray(previousPayload.items)) {
     for (const oldItem of previousPayload.items) {
-      if (oldItem.isTranslated && /[\u4e00-\u9fa5]/.test(oldItem.title || "")) {
+      if (oldItem.isTranslated &&
+          /[\u4e00-\u9fa5]{3,}/.test(oldItem.title || "") &&
+          /[\u4e00-\u9fa5]{6,}/.test(oldItem.body || "")) {
         if (oldItem.link) prevCache.set(oldItem.link, oldItem);
         if (oldItem.origTitle) prevCache.set(oldItem.origTitle, oldItem);
       }
     }
   }
+
+  let translatedCount = 0;
+  let cachedCount = 0;
 
   for (const item of items) {
     if (!item.needTranslate) continue;
@@ -970,20 +1091,34 @@ async function translateForeignArticles(items, previousPayload) {
       item.title = cached.title;
       item.body = cached.body;
       item.isTranslated = true;
+      cachedCount++;
       continue;
     }
 
     try {
       if (item.title && /[a-zA-Z]{4,}/.test(item.title)) {
-        item.title = cleanHeadline(await translateTextWithFallback(item.title));
+        const tTitle = await translateTextWithFallback(item.title);
+        if (/[\u4e00-\u9fa5]/.test(tTitle)) {
+          item.title = cleanHeadline(tTitle);
+        }
       }
       if (item.body && /[a-zA-Z]{4,}/.test(item.body)) {
-        const transBody = await translateTextWithFallback(item.body);
-        item.body = cleanTruncatedTail(stripVideoFallbackNoise(transBody));
+        const tBody = await translateTextWithFallback(item.body);
+        if (/[\u4e00-\u9fa5]/.test(tBody)) {
+          item.body = cleanTruncatedTail(stripVideoFallbackNoise(tBody));
+        }
       }
-      item.isTranslated = true;
-    } catch (e) {}
+      if (/[\u4e00-\u9fa5]{3,}/.test(item.title)) {
+        item.isTranslated = true;
+        translatedCount++;
+      } else {
+        item.isTranslated = false;
+      }
+    } catch (e) {
+      item.isTranslated = false;
+    }
   }
+  console.log(`[Translate Summary] newly translated=${translatedCount}, reused from cache=${cachedCount}`);
 }
 
 function enforceSourceQuota(items) {
@@ -1154,7 +1289,7 @@ async function main() {
   const rawRequests = sources.map(src => ({
     url: ensureSafeUrl(src.url),
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+      "User-Agent": BROWSER_UA,
       "Accept": "application/rss+xml, application/xml, text/xml, */*",
       "Accept-Language": "zh-HK,zh-TW;q=0.9,zh;q=0.8,en-US;q=0.7"
     }
