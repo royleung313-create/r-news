@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="R! News">
+  <meta name="theme-color" id="themeColorMeta" content="#f4f5f7">
+  <title>R! News - 每日精選新聞</title>
+  <style>
+    :root {
+      --bg-color: #f4f5f7;
+      --card-bg: #ffffff;
+      --brand-red: #d91429;
+      --text-main: #111111;
+      --text-sub: #555555;
+      --text-muted: #777777;
+      --border-light: #e5e7eb;
+      --header-border: #111111;
+      --footer-bg: #f2efe9;
+      --footer-divider: #dcd7ce;
+      --modal-bg: #ffffff;
+      --about-modal-bg: #f2efe9;
+    }
+    body.dark-mode {
+      --bg-color: #111315;
+      --card-bg: #1b1e23;
+      --brand-red: #e5192f;
+      --text-main: #f1f3f5;
+      --text-sub: #b8c0c8;
+      --text-muted: #868e96;
+      --border-light: #2b3036;
+      --header-border: #2c323a;
+      --footer-bg: #181a1f;
+      --footer-divider: #2b3036;
+      --modal-bg: #1b1e23;
+      --about-modal-bg: #181a1f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang HK", "Microsoft JhengHei", sans-serif; background-color: var(--bg-color); color: var(--text-main); -webkit-font-smoothing: antialiased; padding-bottom: 24px; transition: background-color 0.2s ease, color 0.2s ease; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 18px 16px; }
+
+    /* Header & R! 家族紅底白字圓角方塊 Logo */
+    .header { display: flex; align-items: center; justify-content: space-between; padding-bottom: 14px; border-bottom: 2.5px solid var(--header-border); margin-bottom: 14px; flex-wrap: nowrap; gap: 8px; }
+    .brand-logo { display: inline-flex; align-items: center; gap: 9px; user-select: none; flex-shrink: 0; }
+    .r-icon-sq { background: linear-gradient(145deg, #e5192f, #c80f23); color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-weight: 900; font-style: normal; display: inline-flex; align-items: center; justify-content: center; letter-spacing: -0.5px; line-height: 1; flex-shrink: 0; box-shadow: 0 3px 10px rgba(217, 20, 41, 0.28); }
+    .r-icon-sm { width: 38px; height: 38px; border-radius: 10px; font-size: 21px; }
+    .r-icon-lg { width: 66px; height: 66px; border-radius: 18px; font-size: 34px; cursor: pointer; box-shadow: 0 5px 16px rgba(217, 20, 41, 0.32); transition: transform 0.12s ease; user-select: none; }
+    .r-icon-lg:active { transform: scale(0.94); }
+    .brand-news { font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 30px; font-weight: 900; font-style: normal; color: var(--text-main); letter-spacing: -0.8px; line-height: 1; }
+    .header-controls { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .ver-badge { background: #e9ecef; border: 1px solid #d8dde2; color: #343a40; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; user-select: none; white-space: nowrap; }
+    .ver-badge:hover { background: #dde2e6; }
+    .ver-badge:active { transform: scale(0.96); }
+    .refresh-btn { background: #f8f9fa; border: 1px solid #ced4da; color: #212529; font-size: 14px; font-weight: 600; padding: 7px 15px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s ease; white-space: nowrap; }
+    .refresh-btn:hover:not(:disabled) { background: #e9ecef; }
+    .refresh-btn:disabled { opacity: 0.65; cursor: not-allowed; background: #e9ecef; }
+
+    body.dark-mode .ver-badge { background: #252930; border-color: #363c45; color: #e9ecef; }
+    body.dark-mode .ver-badge:hover { background: #2f343d; }
+    body.dark-mode .refresh-btn { background: #1e2228; border-color: #363c45; color: #e9ecef; }
+    body.dark-mode .refresh-btn:hover:not(:disabled) { background: #2a2f37; }
+    body.dark-mode .refresh-btn:disabled { background: #1a1d22; }
+
+    /* 手機版頂部微創瘦身 */
+    @media (max-width: 480px) {
+      .brand-logo { gap: 7px; }
+      .r-icon-sm { width: 34px; height: 34px; border-radius: 9px; font-size: 19px; }
+      .brand-news { font-size: 26px; }
+      .header-controls { gap: 7px; }
+      .ver-badge { font-size: 12.5px; padding: 5px 10px; }
+      .refresh-btn { font-size: 13px; padding: 6px 11px; }
+      .refresh-label { display: none; }
+    }
+
+    /* Nav Tabs */
+    .nav-tabs { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 16px 2px; scrollbar-width: none; }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .tab-btn { background: #ffffff; border: 1px solid #dcdcdc; color: #222222; font-size: 15px; font-weight: 700; padding: 8px 18px; border-radius: 999px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; }
+    .tab-btn.active { background: #191919; color: #ffffff; border-color: #191919; }
+    body.dark-mode .tab-btn { background: #1b1e23; border-color: #2e333b; color: #ced4da; }
+    body.dark-mode .tab-btn.active { background: #f1f3f5; color: #111315; border-color: #f1f3f5; }
+
+    /* 動態「🚨 突發」專區按鈕 */
+    .tab-btn.breaking-tab { background: #fff1f2; border: 1.5px solid #f43f5e; color: #be123c; }
+    .tab-btn.breaking-tab.active { background: var(--brand-red); color: #ffffff; border-color: var(--brand-red); box-shadow: 0 4px 12px rgba(217, 20, 41, 0.28); }
+    body.dark-mode .tab-btn.breaking-tab { background: #31151b; border-color: #e11d48; color: #fda4af; }
+    body.dark-mode .tab-btn.breaking-tab.active { background: var(--brand-red); color: #ffffff; border-color: var(--brand-red); }
+    .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #e11d48; display: inline-block; animation: breakingPulse 1.4s infinite ease-in-out; }
+    .tab-btn.breaking-tab.active .pulse-dot { background: #ffffff; }
+    @keyframes breakingPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.35); opacity: 0.55; }
+    }
+
+    /* 載入與錯誤狀態提示 */
+    .state-box { grid-column: 1 / -1; text-align: center; padding: 64px 20px; color: var(--text-muted); font-size: 16px; font-weight: 600; }
+    .retry-btn { margin-top: 14px; background: var(--brand-red); color: #fff; border: none; padding: 10px 22px; border-radius: 999px; font-size: 14.5px; font-weight: 700; cursor: pointer; }
+
+    /* News Grid */
+    .news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 18px; min-height: 50vh; align-content: start; }
+    .news-card { background: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border-light); box-shadow: 0 2px 6px rgba(0,0,0,0.03); display: flex; flex-direction: column; justify-content: space-between; cursor: pointer; transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.2s ease; }
+    .news-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.08); }
+    body.dark-mode .news-card { box-shadow: 0 2px 8px rgba(0,0,0,0.28); }
+    .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-tags-left { display: flex; align-items: center; gap: 6px; }
+    .cat-tag { font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 6px; color: #fff; }
+    .cat-港聞 { background: #b91c1c; } .cat-國際 { background: #1d5b8c; } .cat-兩岸 { background: #0f766e; } .cat-娛樂 { background: #7e22ce; } .cat-體育 { background: #15803d; }
+    .breaking-pill { font-size: 11.5px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: #ffe4e6; color: #be123c; border: 1px solid #fecdd3; }
+    body.dark-mode .breaking-pill { background: #3b131b; color: #fda4af; border-color: #881337; }
+    .card-time { font-size: 13px; color: var(--text-muted); }
+    .card-title { font-size: 18.5px; font-weight: 800; line-height: 1.45; color: var(--text-main); margin-bottom: 12px; }
+    .card-desc { font-size: 14.5px; line-height: 1.65; color: var(--text-sub); margin-bottom: 16px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border-light); font-size: 13px; color: var(--text-muted); }
+    .read-more { color: var(--brand-red); font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+
+    /* 品牌底部 Footer */
+    .site-footer { max-width: 1200px; margin: 40px auto 0; padding: 32px 24px; background: var(--footer-bg); border-radius: 18px; color: var(--text-main); border: 1px solid transparent; }
+    body.dark-mode .site-footer { border-color: var(--border-light); }
+    .footer-top { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; }
+    .footer-slogan h2 { font-size: 21px; font-weight: 900; margin-bottom: 6px; color: var(--text-main); letter-spacing: 0.5px; }
+    .footer-slogan .exclaim { color: var(--brand-red); font-style: italic; margin: 0 2px; font-weight: 900; }
+    .footer-slogan p { font-size: 14.5px; color: var(--text-sub); line-height: 1.55; }
+    .footer-divider { height: 1px; background: var(--footer-divider); margin: 22px 0; }
+    .footer-section { margin-bottom: 20px; }
+    .footer-section h3 { font-size: 16px; font-weight: 800; margin-bottom: 10px; color: var(--text-main); display: flex; align-items: center; gap: 6px; }
+    .footer-sources { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 15px; color: var(--text-sub); line-height: 1.65; }
+    .footer-bottom p { font-size: 13.5px; color: var(--text-muted); line-height: 1.65; }
+    .about-ver-row { display: flex; justify-content: flex-end; margin-top: 10px; }
+    .about-ver-tag { font-size: 12.5px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.4px; opacity: 0.85; user-select: none; }
+
+    /* 新聞閱讀彈視窗 Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 16px; backdrop-filter: blur(2px); }
+    .modal-overlay.open { display: flex; }
+    .modal-box { background: var(--modal-bg); width: 100%; max-width: 680px; max-height: 88vh; border-radius: 20px; padding: 26px 28px; position: relative; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.32); border: 1px solid var(--border-light); }
+    .about-modal-box { background: var(--about-modal-bg); }
+    .modal-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 8px; }
+    .modal-header-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .share-mini-btn, .theme-toggle-btn { background: #f1f3f5; border: 1px solid #dcdcdc; color: #222222; font-size: 12.5px; font-weight: 700; padding: 4px 11px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.15s ease; user-select: none; }
+    .share-mini-btn:hover, .theme-toggle-btn:hover { background: #e2e6ea; }
+    .share-mini-btn:active, .theme-toggle-btn:active { transform: scale(0.95); }
+    body.dark-mode .share-mini-btn, body.dark-mode .theme-toggle-btn { background: #262a32; border-color: #3a404c; color: #f1f3f5; }
+    body.dark-mode .share-mini-btn:hover, body.dark-mode .theme-toggle-btn:hover { background: #313742; }
+    .modal-close { width: 36px; height: 36px; border-radius: 50%; border: none; background: #e9ecef; color: #333; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .modal-close:hover { background: #dde2e6; }
+    body.dark-mode .modal-close { background: #2a2e36; color: #e9ecef; }
+    body.dark-mode .modal-close:hover { background: #363b45; }
+    .modal-title { font-size: 22px; font-weight: 800; line-height: 1.45; color: var(--text-main); margin-bottom: 12px; }
+    .modal-meta { font-size: 13.5px; color: var(--text-muted); padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid var(--border-light); }
+    .modal-body { font-size: 16.5px; line-height: 1.85; color: var(--text-main); margin-bottom: 24px; }
+    .modal-body p { margin-bottom: 16px; }
+    .modal-origin-btn { display: block; width: 100%; text-align: center; background: var(--brand-red); color: #ffffff; text-decoration: none; font-size: 15.5px; font-weight: 700; padding: 14px 18px; border-radius: 12px; transition: background 0.15s ease; }
+    .modal-origin-btn:hover { background: #b00116; }
+
+    /* 站長專屬隱藏監測視窗 */
+    .status-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+    .status-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #f8f9fa; border-radius: 10px; font-size: 14.5px; border: 1px solid #eee; }
+    body.dark-mode .status-row { background: #23272e; border-color: #323741; }
+    .status-name { font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+    .status-val { color: var(--text-sub); font-size: 13.5px; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="brand-logo"><span class="r-icon-sq r-icon-sm">R!</span><span class="brand-news">News</span></div>
+      <div class="header-controls">
+        <button class="ver-badge" id="verBadge" onclick="openAboutModal()" title="關於本站 / 深色模式">關於 ⓘ</button>
+        <button class="refresh-btn" id="refreshBtn" onclick="triggerRefresh()">🔄 <span class="refresh-label">更新 : </span><span id="updateTime">--/-- --:--</span></button>
+      </div>
+    </header>
+
+    <nav class="nav-tabs" id="navTabs">
+      <button class="tab-btn active" id="allTabBtn" data-cat="全部" onclick="filterCategory('全部', this)">📰 全部</button>
+      <button class="tab-btn breaking-tab" id="breakingTabBtn" data-cat="突發" onclick="filterCategory('突發', this)" style="display:none;"><span class="pulse-dot"></span><span id="breakingTabLabel">突發</span></button>
+      <button class="tab-btn" data-cat="港聞" onclick="filterCategory('港聞', this)">🇭🇰 港聞</button>
+      <button class="tab-btn" data-cat="國際" onclick="filterCategory('國際', this)">🌍 國際</button>
+      <button class="tab-btn" data-cat="兩岸" onclick="filterCategory('兩岸', this)">🇨🇳🇹🇼 兩岸</button>
+      <button class="tab-btn" data-cat="娛樂" onclick="filterCategory('娛樂', this)">🎬 娛樂</button>
+      <button class="tab-btn" data-cat="體育" onclick="filterCategory('體育', this)">⚽ 體育</button>
+    </nav>
+
+    <main class="news-grid" id="newsGrid">
+      <div class="state-box">⏳ 正在載入最新精選新聞...</div>
+    </main>
+
+    <!-- 品牌底部 Footer (連撳 3 下左上角紅底白字 R! 方塊即可開啟站長監測暗門) -->
+    <footer class="site-footer">
+      <div class="footer-top">
+        <div class="r-icon-sq r-icon-lg" onclick="handleSecretLogoTap()" title="R! News">R!</div>
+        <div class="footer-slogan">
+          <h2>選擇<span class="exclaim">！</span>本身就是一種真相。</h2>
+          <p>嚴選港台主流與獨立外電，自動過濾官媒及干擾廣告，每小時整點自動同步最新動態。</p>
+        </div>
+      </div>
+
+      <div class="footer-divider"></div>
+
+      <div class="footer-section">
+        <h3>🇭🇰 香港本地</h3>
+        <div class="footer-sources">
+          <span>香港01</span><span>Now 新聞</span><span>有線新聞</span><span>商業電台</span><span>集誌社</span><span>獨立媒體</span><span>am730</span><span>香港電台</span>
+        </div>
+      </div>
+
+      <div class="footer-section">
+        <h3>🇨🇳🇹🇼 台灣及兩岸</h3>
+        <div class="footer-sources">
+          <span>三立新聞網</span><span>壹蘋新聞網</span><span>壹電視</span><span>中央社 CNA</span><span>自由時報</span>
+        </div>
+      </div>
+
+      <div class="footer-section">
+        <h3>🌍 國際外電（自動繁中翻譯）</h3>
+        <div class="footer-sources">
+          <span>BBC News</span><span>路透社 Reuters</span>
+        </div>
+      </div>
+
+      <div class="footer-divider"></div>
+
+      <div class="footer-bottom">
+        <p>本站提供無廣告純文字導讀與重點摘要，相片及影片版權歸原媒體所有。點擊右上角「更新時間按鈕」即可隨時拉取最新同步消息。</p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- 新聞內文彈視窗 -->
+  <div class="modal-overlay" id="newsModal" onclick="closeModalOnBg(event)">
+    <div class="modal-box">
+      <div class="modal-header-row">
+        <div class="modal-header-left">
+          <span class="cat-tag" id="modalCat">國際</span>
+          <button class="share-mini-btn" id="modalShareBtn" onclick="shareCurrentArticle()" title="分享新聞給朋友">📤 分享</button>
+        </div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <h2 class="modal-title" id="modalTitle"></h2>
+      <div class="modal-meta" id="modalMeta"></div>
+      <div class="modal-body" id="modalBody"></div>
+      <a class="modal-origin-btn" id="modalLink" href="#" target="_blank" rel="noopener noreferrer">🖼️ 前往原網站查看現場相片及完整報道 ➜</a>
+    </div>
+  </div>
+
+  <!-- 頂部「關於 ⓘ」快速彈視窗 -->
+  <div class="modal-overlay" id="aboutModal" onclick="closeAboutModalOnBg(event)">
+    <div class="modal-box about-modal-box">
+      <div class="modal-header-row">
+        <div class="modal-header-left">
+          <span class="cat-tag" style="background:#191919;">ℹ️ 關於本站 · About Us</span>
+          <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleDarkMode()" title="切換深色 / 淺色模式">🌙 深色模式</button>
+        </div>
+        <button class="modal-close" onclick="closeAboutModal()">✕</button>
+      </div>
+      <div class="footer-top" style="margin-top:6px;">
+        <div class="r-icon-sq r-icon-lg" onclick="handleSecretLogoTap()" title="R! News">R!</div>
+        <div class="footer-slogan">
+          <h2>選擇<span class="exclaim">！</span>本身就是一種真相。</h2>
+          <p>嚴選港台主流與獨立外電，自動過濾官媒及干擾廣告，每小時整點自動同步最新動態。</p>
+        </div>
+      </div>
+
+      <div class="footer-divider"></div>
+
+      <div class="footer-section">
+        <h3>🇭🇰 香港本地</h3>
+        <div class="footer-sources">
+          <span>香港01</span><span>Now 新聞</span><span>有線新聞</span><span>商業電台</span><span>集誌社</span><span>獨立媒體</span><span>am730</span><span>香港電台</span>
+        </div>
+      </div>
+
+      <div class="footer-section">
+        <h3>🇨🇳🇹🇼 台灣及兩岸</h3>
+        <div class="footer-sources">
+          <span>三立新聞網</span><span>壹蘋新聞網</span><span>壹電視</span><span>中央社 CNA</span><span>自由時報</span>
+        </div>
+      </div>
+
+      <div class="footer-section">
+        <h3>🌍 國際外電（自動繁中翻譯）</h3>
+        <div class="footer-sources">
+          <span>BBC News</span><span>路透社 Reuters</span>
+        </div>
+      </div>
+
+      <div class="footer-divider"></div>
+
+      <div class="footer-bottom">
+        <p>本站提供無廣告純文字導讀與重點摘要，相片及影片版權歸原媒體所有。點擊右上角「更新時間按鈕」即可隨時拉取最新同步消息。</p>
+        <div class="about-ver-row">
+          <span class="about-ver-tag" id="aboutVerTag">ver 2.5</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 隱藏式站長暗門：來源健康狀態監測視窗 -->
+  <div class="modal-overlay" id="statusModal" onclick="closeStatusModalOnBg(event)">
+    <div class="modal-box">
+      <div class="modal-header-row">
+        <span class="cat-tag" style="background:#111;">🕵️‍♂️ 站長專屬監測</span>
+        <button class="modal-close" onclick="closeStatusModal()">✕</button>
+      </div>
+      <h2 class="modal-title" style="font-size:20px;">本次各媒體抓取健康狀態</h2>
+      <div class="modal-meta" id="statusMeta"></div>
+      <div class="status-list" id="statusList"></div>
+    </div>
+  </div>
+
+  <script>
+    const DATA_URL = "https://raw.githubusercontent.com/royleung313-create/r-news/data/news.json";
+
+    let NEWS_STATE = { version: "ver 2.5", updatedAt: "--/-- --:--", fullUpdatedAt: "", sourceStats: [], items: [] };
+    let currentCategory = "全部";
+    let currentModalItem = null;
+    let secretTapCount = 0;
+    let secretTapTimer = null;
+    let cooldownTimer = null;
+    let shareFeedbackTimer = null;
+
+    function initTheme() {
+      let savedTheme = "light";
+      try {
+        savedTheme = localStorage.getItem("r_news_theme") || "light";
+      } catch (e) {}
+      applyTheme(savedTheme === "dark");
+    }
+
+    function applyTheme(isDark) {
+      if (isDark) {
+        document.body.classList.add("dark-mode");
+      } else {
+        document.body.classList.remove("dark-mode");
+      }
+      const toggleBtn = document.getElementById("themeToggleBtn");
+      if (toggleBtn) {
+        toggleBtn.textContent = isDark ? "☀️ 淺色模式" : "🌙 深色模式";
+      }
+      const themeMeta = document.getElementById("themeColorMeta");
+      if (themeMeta) {
+        themeMeta.setAttribute("content", isDark ? "#111315" : "#f4f5f7");
+      }
+    }
+
+    function toggleDarkMode() {
+      const isNowDark = !document.body.classList.contains("dark-mode");
+      applyTheme(isNowDark);
+      try {
+        localStorage.setItem("r_news_theme", isNowDark ? "dark" : "light");
+      } catch (e) {}
+    }
+
+    async function fetchLatestNews(isManual = false) {
+      const btn = document.getElementById("refreshBtn");
+      const grid = document.getElementById("newsGrid");
+
+      if (isManual) {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.innerHTML = "⏳ 同步中...";
+      }
+
+      try {
+        const res = await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        if (!data || !Array.isArray(data.items)) throw new Error("Invalid data");
+
+        NEWS_STATE = data;
+        const rawVer = (NEWS_STATE.version || "ver 2.5").replace(/^v(?=\d)/i, "ver ");
+        const aboutVerEl = document.getElementById("aboutVerTag");
+        if (aboutVerEl) aboutVerEl.textContent = rawVer;
+
+        const updatedText = NEWS_STATE.updatedAt || "--/-- --:--";
+        const timeEl = document.getElementById("updateTime");
+        if (timeEl) timeEl.textContent = updatedText;
+
+        updateBreakingTabUI();
+        renderCards();
+
+        if (isManual) {
+          startRefreshCooldown(updatedText);
+        }
+      } catch (err) {
+        if (!NEWS_STATE.items || NEWS_STATE.items.length === 0) {
+          grid.innerHTML = '<div class="state-box">⚠️ 暫時無法載入新聞資料，請稍後重試。<br><button class="retry-btn" onclick="fetchLatestNews(false)">重新載入</button></div>';
+        }
+        if (isManual) {
+          btn.disabled = false;
+          btn.innerHTML = '🔄 <span class="refresh-label">更新 : </span><span id="updateTime">' + (NEWS_STATE.updatedAt || "--/-- --:--") + '</span>';
+        }
+      }
+    }
+
+    function updateBreakingTabUI() {
+      const breakingBtn = document.getElementById("breakingTabBtn");
+      const breakingLabel = document.getElementById("breakingTabLabel");
+      const allItems = NEWS_STATE.items || [];
+      const breakingCount = allItems.filter(it => it.isBreaking).length;
+
+      if (breakingCount > 0) {
+        breakingBtn.style.display = "inline-flex";
+        breakingLabel.textContent = "突發 (" + breakingCount + ")";
+      } else {
+        breakingBtn.style.display = "none";
+        if (currentCategory === "突發") {
+          currentCategory = "全部";
+          document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+          const allBtn = document.getElementById("allTabBtn");
+          if (allBtn) allBtn.classList.add("active");
+        }
+      }
+    }
+
+    function filterCategory(cat, btnEl) {
+      currentCategory = cat;
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      btnEl.classList.add("active");
+      renderCards();
+    }
+
+    function renderCards() {
+      const grid = document.getElementById("newsGrid");
+      grid.innerHTML = "";
+      const items = (NEWS_STATE.items || [])
+        .filter(item => {
+          if (currentCategory === "全部") return true;
+          if (currentCategory === "突發") return !!item.isBreaking;
+          return item.category === currentCategory;
+        })
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      if (items.length === 0) {
+        grid.innerHTML = '<div class="state-box">此分類暫時未有最新精選新聞。</div>';
+        return;
+      }
+
+      items.forEach(item => {
+        const card = document.createElement("article");
+        card.className = "news-card";
+        card.onclick = () => openModal(item);
+        const srcLabel = item.isTranslated ? item.sourceName + " · 自動翻譯" : item.sourceName;
+        const breakingBadgeHtml = item.isBreaking ? '<span class="breaking-pill">🚨 突發</span>' : '';
+
+        card.innerHTML = `
+          <div>
+            <div class="card-top">
+              <div class="card-tags-left">
+                <span class="cat-tag cat-${item.category}">${item.category}</span>
+                ${breakingBadgeHtml}
+              </div>
+              <span class="card-time">🕒 ${item.timeStr}</span>
+            </div>
+            <h3 class="card-title">${escapeHtml(item.title)}</h3>
+            <div class="card-desc">${escapeHtml(item.body || item.title)}</div>
+          </div>
+          <div class="card-footer">
+            <span>📰 出處 : ${escapeHtml(srcLabel)}</span>
+            <span class="read-more">📖 閱讀內文 ➜</span>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderModalParagraphs(container, text) {
+      container.innerHTML = "";
+      (text || "").split(/\n+/).forEach(p => {
+        if (p.trim()) {
+          const pTag = document.createElement("p");
+          pTag.textContent = p.trim();
+          container.appendChild(pTag);
+        }
+      });
+    }
+
+    function openModal(item) {
+      currentModalItem = item;
+      const shareBtn = document.getElementById("modalShareBtn");
+      if (shareBtn) shareBtn.textContent = "📤 分享";
+
+      const catEl = document.getElementById("modalCat");
+      catEl.textContent = item.category;
+      catEl.className = "cat-tag cat-" + item.category;
+      document.getElementById("modalTitle").textContent = item.title;
+      const srcDetail = item.isTranslated ? item.sourceName + " ( 外電自動繁中翻譯 )" : item.sourceName;
+      document.getElementById("modalMeta").textContent = "📰 出處 : " + srcDetail + "   |   🕒 時間 : " + item.timeStr;
+
+      const bodyContainer = document.getElementById("modalBody");
+      const currentBody = (item.body || "").trim();
+      renderModalParagraphs(bodyContainer, currentBody || item.title);
+
+      document.getElementById("modalLink").href = item.link || "#";
+      document.getElementById("newsModal").classList.add("open");
+      document.body.style.overflow = "hidden";
+    }
+
+    function shareCurrentArticle() {
+      if (!currentModalItem) return;
+      const firstPara = ((currentModalItem.body || "").split(/\n+/)[0] || "").trim();
+      const shortLead = firstPara.length > 110 ? firstPara.slice(0, 110) + "..." : firstPara;
+      const shareUrl = currentModalItem.link || location.href;
+
+      let shareText = "【R! News 每日精選】\n" + currentModalItem.title + "\n📰 出處：" + currentModalItem.sourceName + "｜" + currentModalItem.timeStr;
+      if (shortLead && shortLead !== currentModalItem.title) {
+        shareText += "\n\n" + shortLead;
+      }
+      shareText += "\n\n🔗 原文連結：" + shareUrl;
+
+      if (navigator.share) {
+        navigator.share({
+          title: currentModalItem.title,
+          text: shareText
+        }).catch(err => {
+          if (err && err.name !== "AbortError") {
+            copyShareTextFallback(shareText);
+          }
+        });
+      } else {
+        copyShareTextFallback(shareText);
+      }
+    }
+
+    function copyShareTextFallback(text) {
+      const btn = document.getElementById("modalShareBtn");
+      const showCopied = () => {
+        if (!btn) return;
+        btn.textContent = "✅ 已複製";
+        if (shareFeedbackTimer) clearTimeout(shareFeedbackTimer);
+        shareFeedbackTimer = setTimeout(() => { btn.textContent = "📤 分享"; }, 2200);
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(showCopied).catch(() => {
+          legacyExecCopy(text);
+          showCopied();
+        });
+      } else {
+        legacyExecCopy(text);
+        showCopied();
+      }
+    }
+
+    function legacyExecCopy(text) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+
+    function closeModal() {
+      document.getElementById("newsModal").classList.remove("open");
+      document.body.style.overflow = "";
+    }
+    function closeModalOnBg(e) { if (e.target.id === "newsModal") closeModal(); }
+
+    function openAboutModal() {
+      document.getElementById("aboutModal").classList.add("open");
+      document.body.style.overflow = "hidden";
+    }
+    function closeAboutModal() {
+      document.getElementById("aboutModal").classList.remove("open");
+      document.body.style.overflow = "";
+    }
+    function closeAboutModalOnBg(e) { if (e.target.id === "aboutModal") closeAboutModal(); }
+
+    function handleSecretLogoTap() {
+      secretTapCount++;
+      if (secretTapTimer) clearTimeout(secretTapTimer);
+      if (secretTapCount >= 3) {
+        secretTapCount = 0;
+        closeAboutModal();
+        openStatusModal();
+      } else {
+        secretTapTimer = setTimeout(() => { secretTapCount = 0; }, 1200);
+      }
+    }
+
+    function openStatusModal() {
+      const metaEl = document.getElementById("statusMeta");
+      const listEl = document.getElementById("statusList");
+      const totalCount = (NEWS_STATE.items || []).length;
+      metaEl.textContent = "🕒 最後同步：" + (NEWS_STATE.fullUpdatedAt || NEWS_STATE.updatedAt) + "  |  📦 全站精選：" + totalCount + " 則";
+
+      listEl.innerHTML = "";
+      const stats = NEWS_STATE.sourceStats || [];
+      stats.forEach(st => {
+        const row = document.createElement("div");
+        row.className = "status-row";
+        const isOk = st.ok && st.rawCount > 0;
+        const icon = isOk ? "🟢" : "🔴";
+        const statusText = isOk
+          ? "可用 " + st.rawCount + " 則 · 展示 " + st.selectedCount + " 則"
+          : "0 則 (連線逾時或暫無新稿)";
+        row.innerHTML = `
+          <div class="status-name"><span>${icon}</span><span>${escapeHtml(st.name)}</span></div>
+          <div class="status-val">${statusText}</div>
+        `;
+        listEl.appendChild(row);
+      });
+
+      document.getElementById("statusModal").classList.add("open");
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeStatusModal() {
+      document.getElementById("statusModal").classList.remove("open");
+      document.body.style.overflow = "";
+    }
+    function closeStatusModalOnBg(e) { if (e.target.id === "statusModal") closeStatusModal(); }
+
+    function startRefreshCooldown(updatedTimeText) {
+      const btn = document.getElementById("refreshBtn");
+      let remaining = 15;
+      btn.disabled = true;
+      if (cooldownTimer) clearInterval(cooldownTimer);
+
+      btn.innerHTML = "✅ 已同步 (" + remaining + "s)";
+      cooldownTimer = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+          clearInterval(cooldownTimer);
+          btn.disabled = false;
+          btn.innerHTML = '🔄 <span class="refresh-label">更新 : </span><span id="updateTime">' + updatedTimeText + '</span>';
+        } else {
+          btn.innerHTML = "✅ 已同步 (" + remaining + "s)";
+        }
+      }, 1000);
+    }
+
+    function triggerRefresh() {
+      fetchLatestNews(true);
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement("div");
+      div.textContent = str || "";
+      return div.innerHTML;
+    }
+
+    initTheme();
+    fetchLatestNews(false);
+  </script>
+</body>
+</html>
