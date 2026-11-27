@@ -33,10 +33,16 @@ const BREAKING_VIP_KEYWORDS = [
 const HIGH_ALERT_BREAKING_REGEX = /(^突發|^【突發】|^快訊|^【快訊】|突發[｜|:：！!\s]|快訊[｜|:：！!\s]|三級火|四級火|五級火|黑雨|黑色暴雨|紅雨|紅色暴雨|八號烈風|八號風球|九號烈風|九號風球|十號颶風|十號風球|極端情況|大地震|海嘯警報|恐襲|恐怖襲擊|空難|墜機|槍擊案|嚴重車禍|連環相撞|全線停駛|港鐵故障|宣佈停課|宣布停課|戒嚴|宣戰|導彈襲擊|空襲|遇刺|爆炸案|大樓倒塌|塌樓|墮海|沉船)/i;
 
 const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+const MOBILE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1";
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 let geminiDisabled = false;
 let geminiFailCount = 0;
-let edgeTokenCache = null;
+let workingGeminiEndpoint = null;
+let gMobileDisabled = false;
+let clients5Disabled = false;
+const engineStats = { gemini: 0, gmobile: 0, clients5: 0, mymemory: 0 };
 
 function getHkParts(ts) {
   const d = new Date(ts + 8 * 60 * 60 * 1000);
@@ -234,7 +240,6 @@ function getNewsSourcesConfig() {
     { category: "港聞", sourceName: "Now 新聞", statGroup: "Now 新聞", url: "https://www.bing.com/news/search?q=site:news.now.com+%E9%A6%99%E6%B8%AF&setmkt=zh-HK&format=rss", maxCount: 10, priority: 12 },
     { category: "港聞", sourceName: "Now 新聞", statGroup: "Now 新聞", url: "https://news.google.com/rss/search?q=site:news.now.com+%E6%B8%AF%E8%81%9E+when:1d&hl=zh-HK&gl=HK&ceid=HK:zh-Hant", maxCount: 6, priority: 11 },
     { category: "港聞", sourceName: "香港01", statGroup: "香港01", url: "https://www.bing.com/news/search?q=site:hk01.com+(%E6%B8%AF%E8%81%9E+OR+%E7%AA%81%E7%99%BC+OR+%E7%A4%BE%E6%9C%83%E6%96%B0%E8%81%9E+OR+%E6%94%BF%E6%83%85)&setmkt=zh-HK&format=rss", maxCount: 12, priority: 12 },
-    // 集誌社：直連 + Bing / Google News 雙中轉防雲端封鎖
     { category: "港聞", sourceName: "集誌社", statGroup: "集誌社", url: "https://thecollectivehk.com/feed/", maxCount: 6, priority: 11 },
     { category: "港聞", sourceName: "集誌社", statGroup: "集誌社", url: "https://www.bing.com/news/search?q=site:thecollectivehk.com&setmkt=zh-HK&format=rss", maxCount: 6, priority: 11 },
     { category: "港聞", sourceName: "集誌社", statGroup: "集誌社", url: "https://news.google.com/rss/search?q=site:thecollectivehk.com+when:2d&hl=zh-HK&gl=HK&ceid=HK:zh-Hant", maxCount: 6, priority: 11 },
@@ -903,19 +908,52 @@ function extractGoogleNewsClusterSubtitles(descHtml, mainTitle) {
   return lines.join("\n\n");
 }
 
-// 翻譯引擎 1：Gemini（自動識別 Vertex AI 的 AQ. 金鑰與 AI Studio 金鑰）
+function splitTextIntoChunks(text, maxLen) {
+  const paras = text.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+  const chunks = [];
+  for (const p of paras) {
+    if (p.length <= maxLen) {
+      chunks.push(p);
+    } else {
+      const sentences = p.split(/(?<=[.!?])\s+/);
+      let buf = "";
+      for (const s of sentences) {
+        if ((buf + " " + s).trim().length > maxLen && buf) {
+          chunks.push(buf.trim());
+          buf = s;
+        } else {
+          buf = buf ? buf + " " + s : s;
+        }
+      }
+      if (buf.trim()) chunks.push(buf.trim().slice(0, maxLen));
+    }
+  }
+  return chunks;
+}
+
+// 翻譯引擎 1：Gemini（自動探測 AI Studio 與 Vertex AI 接口，一通即鎖定）
 async function translateWithGemini(text) {
   const apiKey = (process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey || !text || geminiDisabled) return "";
 
-  const endpoints = apiKey.startsWith("AQ.")
-    ? [
-        `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`,
-        `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`
-      ]
-    : [
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`
-      ];
+  const endpoints = [
+    {
+      name: "AIStudio-latest",
+      url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${encodeURIComponent(apiKey)}`
+    },
+    {
+      name: "AIStudio-lite",
+      url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`
+    },
+    {
+      name: "Vertex-lite",
+      url: `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash-lite:generateContent?key=${encodeURIComponent(apiKey)}`
+    },
+    {
+      name: "Vertex-flash",
+      url: `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`
+    }
+  ];
 
   const payload = JSON.stringify({
     contents: [{
@@ -926,8 +964,10 @@ async function translateWithGemini(text) {
     }]
   });
 
-  for (const url of endpoints) {
-    const res = await safeFetch(url, {
+  const targetList = workingGeminiEndpoint ? [workingGeminiEndpoint] : endpoints;
+
+  for (const ep of targetList) {
+    const res = await safeFetch(ep.url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: payload
@@ -938,130 +978,165 @@ async function translateWithGemini(text) {
         const data = JSON.parse(res.text);
         const out = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
         if (/[\u4e00-\u9fa5]/.test(out)) {
+          if (!workingGeminiEndpoint) {
+            workingGeminiEndpoint = ep;
+            console.log(`[Translate:Gemini] locked endpoint=${ep.name}`);
+          }
           geminiFailCount = 0;
           return out;
         }
       } catch (e) {}
     } else {
-      console.log(`[Translate:Gemini] status=${res.status}`);
+      const msg = (res.text || "").replace(/\s+/g, " ").slice(0, 160);
+      console.log(`[Translate:Gemini:${ep.name}] status=${res.status} ${msg}`);
     }
   }
 
   geminiFailCount++;
-  if (geminiFailCount >= 2) {
+  if (!workingGeminiEndpoint || geminiFailCount >= 3) {
     geminiDisabled = true;
-    console.log("[Translate:Gemini] disabled for remaining run, switching to Edge/GTX");
+    console.log("[Translate:Gemini] disabled for remaining run, switching to free fallbacks");
   }
   return "";
 }
 
-// 翻譯引擎 2：微軟 Edge 免 Key 繁中翻譯（Azure / GitHub Actions 機房最穩定）
-async function getEdgeTranslateToken() {
-  if (edgeTokenCache) return edgeTokenCache;
-  const res = await safeFetch("https://edge.microsoft.com/translate/auth", {
-    headers: { "User-Agent": BROWSER_UA }
-  }, 10000);
-  if (res.status === 200 && res.text && res.text.trim().length > 20) {
-    edgeTokenCache = res.text.trim();
-    return edgeTokenCache;
-  }
-  console.log(`[Translate:EdgeAuth] status=${res.status}`);
-  return "";
-}
+// 翻譯引擎 2：Google 行動網頁免 Key 翻譯
+async function translateWithGoogleMobile(text) {
+  if (!text || gMobileDisabled) return "";
+  const chunks = splitTextIntoChunks(text, 1000);
+  const translated = [];
+  let anyChinese = false;
 
-async function translateWithEdge(text) {
-  if (!text) return "";
-  const token = await getEdgeTranslateToken();
-  if (!token) return "";
+  for (const chunk of chunks) {
+    const url = "https://translate.google.com/m?sl=en&tl=zh-TW&hl=zh-TW&q=" + encodeURIComponent(chunk);
+    const res = await safeFetch(url, {
+      headers: {
+        "User-Agent": MOBILE_UA,
+        "Accept-Language": "zh-HK,zh-TW;q=0.9,en;q=0.8"
+      }
+    }, 10000);
 
-  const chunks = [];
-  if (text.length <= 3800) {
-    chunks.push(text);
-  } else {
-    const paras = text.split(/\n\n+/);
-    let buf = "";
-    for (const p of paras) {
-      if ((buf + "\n\n" + p).length > 3800 && buf) {
-        chunks.push(buf);
-        buf = p;
-      } else {
-        buf = buf ? buf + "\n\n" + p : p;
+    if (res.status === 200 && res.text) {
+      const m = res.text.match(/<div[^>]+class=["'](?:result-container|t0)["'][^>]*>([\s\S]*?)<\/div>/i);
+      if (m && m[1]) {
+        const out = decodeHtmlEntities(m[1]).trim();
+        if (/[\u4e00-\u9fa5]/.test(out)) {
+          anyChinese = true;
+          translated.push(out);
+          await sleep(200);
+          continue;
+        }
+      }
+    } else {
+      console.log(`[Translate:GMobile] status=${res.status}`);
+      if (res.status === 429 || res.status === 403) {
+        gMobileDisabled = true;
+        return "";
       }
     }
-    if (buf) chunks.push(buf);
+    return "";
   }
+  return anyChinese ? translated.join("\n\n") : "";
+}
 
-  const outParts = [];
-  for (const ch of chunks) {
-    const res = await safeFetch(
-      "https://api-edge.cognitive.microsofttranslator.com/translate?from=en&to=zh-Hant&api-version=3.0",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + token,
-          "Content-Type": "application/json",
-          "User-Agent": BROWSER_UA
-        },
-        body: JSON.stringify([{ Text: ch }])
-      },
-      12000
-    );
-    if (res.status === 200) {
+// 翻譯引擎 3：Google Chrome 擴充免 Key 接口（clients5）
+async function translateWithGoogleClients5(text) {
+  if (!text || clients5Disabled) return "";
+  const chunks = splitTextIntoChunks(text, 1000);
+  const translated = [];
+  let anyChinese = false;
+
+  for (const chunk of chunks) {
+    const url = "https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=en&tl=zh-TW&q=" + encodeURIComponent(chunk);
+    const res = await safeFetch(url, {
+      headers: { "User-Agent": BROWSER_UA }
+    }, 10000);
+
+    if (res.status === 200 && res.text) {
       try {
         const data = JSON.parse(res.text);
-        const tr = data?.[0]?.translations?.[0]?.text || "";
-        if (/[\u4e00-\u9fa5]/.test(tr)) {
-          outParts.push(tr);
+        let out = "";
+        if (Array.isArray(data)) {
+          if (typeof data[0] === "string") out = data[0];
+          else if (Array.isArray(data[0]) && typeof data[0][0] === "string") out = data[0][0];
+        }
+        if (/[\u4e00-\u9fa5]/.test(out)) {
+          anyChinese = true;
+          translated.push(out.trim());
+          await sleep(200);
           continue;
         }
       } catch (e) {}
     } else {
-      console.log(`[Translate:Edge] status=${res.status}`);
-      return "";
+      console.log(`[Translate:Clients5] status=${res.status}`);
+      if (res.status === 429 || res.status === 403) {
+        clients5Disabled = true;
+        return "";
+      }
     }
+    return "";
   }
-  return outParts.join("\n\n");
+  return anyChinese ? translated.join("\n\n") : "";
 }
 
-// 翻譯引擎 3：Google GTX 免 Key 保底（附瀏覽器標頭）
-async function translateWithGtx(text) {
+// 翻譯引擎 4：MyMemory 免費開放 API（終極保底）
+async function translateWithMyMemory(text) {
   if (!text) return "";
-  const paras = text.split(/\n\n+/);
+  const chunks = splitTextIntoChunks(text, 440);
   const translated = [];
   let anyChinese = false;
-  for (const p of paras) {
-    const chunk = p.trim();
-    if (!chunk) continue;
-    const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=" + encodeURIComponent(chunk.slice(0, 1500));
+
+  for (const chunk of chunks) {
+    const url = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(chunk) + "&langpair=en|zh-TW";
     const res = await safeFetch(url, {
       headers: { "User-Agent": BROWSER_UA }
     }, 10000);
-    if (res.status === 200) {
+
+    if (res.status === 200 && res.text) {
       try {
         const data = JSON.parse(res.text);
-        if (data && data[0]) {
-          const out = data[0].map(seg => seg[0] || "").join("");
-          if (/[\u4e00-\u9fa5]/.test(out)) anyChinese = true;
-          translated.push(out);
+        const out = (data?.responseData?.translatedText || "").trim();
+        if (out && !/MYMEMORY WARNING/i.test(out) && /[\u4e00-\u9fa5]/.test(out)) {
+          anyChinese = true;
+          translated.push(decodeHtmlEntities(out));
+          await sleep(250);
           continue;
         }
       } catch (e) {}
+    } else {
+      console.log(`[Translate:MyMemory] status=${res.status}`);
     }
-    translated.push(chunk);
+    return "";
   }
   return anyChinese ? translated.join("\n\n") : "";
 }
 
 async function translateTextWithFallback(text) {
   if (!text) return "";
+
   const geminiRes = await translateWithGemini(text);
-  if (geminiRes) return geminiRes;
+  if (geminiRes) {
+    engineStats.gemini++;
+    return geminiRes;
+  }
 
-  const edgeRes = await translateWithEdge(text);
-  if (edgeRes) return edgeRes;
+  const gMobileRes = await translateWithGoogleMobile(text);
+  if (gMobileRes) {
+    engineStats.gmobile++;
+    return gMobileRes;
+  }
 
-  const gtxRes = await translateWithGtx(text);
-  if (gtxRes) return gtxRes;
+  const clients5Res = await translateWithGoogleClients5(text);
+  if (clients5Res) {
+    engineStats.clients5++;
+    return clients5Res;
+  }
+
+  const myMemoryRes = await translateWithMyMemory(text);
+  if (myMemoryRes) {
+    engineStats.mymemory++;
+    return myMemoryRes;
+  }
 
   return text;
 }
@@ -1118,7 +1193,7 @@ async function translateForeignArticles(items, previousPayload) {
       item.isTranslated = false;
     }
   }
-  console.log(`[Translate Summary] newly translated=${translatedCount}, reused from cache=${cachedCount}`);
+  console.log(`[Translate Summary] newly translated=${translatedCount}, reused from cache=${cachedCount}, engines=${JSON.stringify(engineStats)}`);
 }
 
 function enforceSourceQuota(items) {
