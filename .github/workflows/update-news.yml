@@ -2,7 +2,7 @@ name: R! News Hourly Update
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '12,42 * * * *'
   workflow_dispatch:
 
 permissions:
