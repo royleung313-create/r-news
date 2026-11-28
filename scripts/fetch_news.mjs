@@ -1512,10 +1512,49 @@ async function main() {
     });
   }
 
-  await translateForeignArticles(candidateItems, previousPayload);
+ await translateForeignArticles(candidateItems, previousPayload);
+
+  // 新舊合併：保留 60 小時內未過期的舊新聞（自動去重、不重複翻譯）
+  if (previousPayload && Array.isArray(previousPayload.items)) {
+    const existingLinks = new Set(candidateItems.map(it => it.link).filter(Boolean));
+    const existingOrigTitles = new Set(candidateItems.map(it => it.origTitle).filter(Boolean));
+
+    for (const oldItem of previousPayload.items) {
+      if (!oldItem.timestamp || (nowMs - oldItem.timestamp) > MAX_NEWS_AGE_MS) continue;
+      if (oldItem.link && existingLinks.has(oldItem.link)) continue;
+      if (oldItem.origTitle && existingOrigTitles.has(oldItem.origTitle)) continue;
+      if (isVideoProgramTitle(oldItem.title)) continue;
+      if (!oldItem.body || isSystemErrorNoise(oldItem.body)) continue;
+      if (oldItem.body.trim() === (oldItem.title || "").trim()) continue;
+      if (oldItem.needTranslate) {
+        if (!oldItem.isTranslated || !/[\u4e00-\u9fa5]{3,}/.test(oldItem.title || "")) continue;
+      } else if (!hasEnoughChinese(oldItem.title, oldItem.body)) {
+        continue;
+      }
+      if (findCrossMediaDuplicate(oldItem, candidateItems, false) !== -1) continue;
+
+      candidateItems.push(oldItem);
+      if (oldItem.link) existingLinks.add(oldItem.link);
+      if (oldItem.origTitle) existingOrigTitles.add(oldItem.origTitle);
+    }
+  }
+
   markBreakingNewsItems(candidateItems, nowMs);
 
-  const finalItems = sortItemsByTimeDesc(candidateItems).slice(0, MAX_TOTAL_NEWS);
+  // 依時間由新至舊排序，並控制各分類上限（防止單一分類霸佔全部 250 個名額）
+  const sortedAll = sortItemsByTimeDesc(candidateItems);
+  const finalCatLimits = { "港聞": 85, "國際": 55, "兩岸": 45, "娛樂": 35, "體育": 35 };
+  const finalCatCount = {};
+  const finalItems = [];
+  for (const it of sortedAll) {
+    const c = it.category || "港聞";
+    const limit = finalCatLimits[c] || 40;
+    if ((finalCatCount[c] || 0) < limit) {
+      finalCatCount[c] = (finalCatCount[c] || 0) + 1;
+      finalItems.push(it);
+      if (finalItems.length >= MAX_TOTAL_NEWS) break;
+    }
+  }
   finalItems.forEach(it => {
     const k = it.statGroup || it.sourceName;
     if (rawStatsMap[k]) {
