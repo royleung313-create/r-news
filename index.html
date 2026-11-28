@@ -168,6 +168,12 @@
     body.dark-mode .status-row { background: #23272e; border-color: #323741; }
     .status-name { font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
     .status-val { color: var(--text-sub); font-size: 13.5px; font-weight: 600; }
+    .force-crawl-box { margin-bottom: 16px; }
+    .force-crawl-btn { width: 100%; background: var(--brand-red); color: #ffffff; border: none; border-radius: 12px; padding: 12px 16px; font-size: 15px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: opacity 0.15s ease, transform 0.12s ease; }
+    .force-crawl-btn:hover:not(:disabled) { opacity: 0.92; }
+    .force-crawl-btn:active:not(:disabled) { transform: scale(0.98); }
+    .force-crawl-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .force-crawl-hint { font-size: 13px; color: var(--text-muted); margin-top: 8px; text-align: center; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -316,7 +322,11 @@
         <button class="modal-close" onclick="closeStatusModal()">✕</button>
       </div>
       <h2 class="modal-title" style="font-size:20px;">本次各媒體抓取健康狀態</h2>
-      <div class="modal-meta" id="statusMeta"></div>
+     <div class="modal-meta" id="statusMeta"></div>
+      <div class="force-crawl-box">
+        <button class="force-crawl-btn" id="forceCrawlBtn" onclick="triggerForceCrawl()">🚀 強制後台重抓最新新聞</button>
+        <div class="force-crawl-hint" id="forceCrawlHint"></div>
+      </div>
       <div class="status-list" id="statusList"></div>
     </div>
   </div>
@@ -669,6 +679,51 @@
       document.body.style.overflow = "";
     }
     function closeStatusModalOnBg(e) { if (e.target.id === "statusModal") closeStatusModal(); }
+
+    let forceCrawlTimer = null;
+    async function triggerForceCrawl() {
+      const btn = document.getElementById("forceCrawlBtn");
+      const hint = document.getElementById("forceCrawlHint");
+      if (!btn || btn.disabled) return;
+
+      btn.disabled = true;
+      btn.textContent = "⏳ 正在叫醒雲端爬蟲...";
+      if (hint) hint.textContent = "正在傳送指令至 GitHub Actions...";
+
+      try {
+        const res = await fetch("/api/trigger", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || ("HTTP " + res.status));
+        }
+
+        let sec = 65;
+        if (forceCrawlTimer) clearInterval(forceCrawlTimer);
+        btn.textContent = "✅ 後台重抓中 (" + sec + "s)";
+        if (hint) hint.textContent = "已發出指令！GitHub 約需 1 分鐘完成，倒數完會自動同步。";
+
+        forceCrawlTimer = setInterval(async () => {
+          sec--;
+          if (sec <= 0) {
+            clearInterval(forceCrawlTimer);
+            btn.disabled = false;
+            btn.textContent = "🚀 強制後台重抓最新新聞";
+            if (hint) hint.textContent = "🔄 正在拉取最新抓取結果...";
+            await fetchLatestNews(false);
+            if (document.getElementById("statusModal").classList.contains("open")) {
+              openStatusModal();
+            }
+            if (hint) hint.textContent = "✅ 已自動同步完成！";
+          } else {
+            btn.textContent = "✅ 後台重抓中 (" + sec + "s)";
+          }
+        }, 1000);
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "🚀 強制後台重抓最新新聞";
+        if (hint) hint.textContent = "❌ 觸發失敗：" + (err.message || "連線錯誤");
+      }
+    }
 
     function startRefreshCooldown(updatedTimeText) {
       const btn = document.getElementById("refreshBtn");
