@@ -117,6 +117,13 @@
     .card-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid var(--border-light); font-size: 13px; color: var(--text-muted); }
     .read-more { color: var(--brand-red); font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
 
+    /* 底部載入更多按鈕 */
+    .load-more-wrap { display: none; justify-content: center; margin-top: 26px; }
+    .load-more-btn { background: var(--card-bg); border: 1.5px solid var(--border-light); color: var(--text-main); font-size: 14.5px; font-weight: 700; padding: 12px 28px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); transition: all 0.15s ease; }
+    .load-more-btn:hover { border-color: var(--brand-red); color: var(--brand-red); transform: translateY(-1px); }
+    .load-more-btn:active { transform: scale(0.97); }
+    body.dark-mode .load-more-btn { box-shadow: 0 2px 10px rgba(0,0,0,0.28); }
+
     /* 品牌底部 Footer */
     .site-footer { max-width: 1200px; margin: 40px auto 0; padding: 32px 24px; background: var(--footer-bg); border-radius: 18px; color: var(--text-main); border: 1px solid transparent; }
     body.dark-mode .site-footer { border-color: var(--border-light); }
@@ -187,13 +194,17 @@
       <div class="state-box">⏳ 正在載入最新精選新聞...</div>
     </main>
 
+    <div class="load-more-wrap" id="loadMoreWrap">
+      <button class="load-more-btn" id="loadMoreBtn" onclick="loadMoreNews()">👇 載入更多新聞</button>
+    </div>
+
     <!-- 品牌底部 Footer (連撳 3 下左上角紅底白字 R! 方塊即可開啟站長監測暗門) -->
     <footer class="site-footer">
       <div class="footer-top">
         <div class="r-icon-sq r-icon-lg" onclick="handleSecretLogoTap()" title="R! News">R!</div>
         <div class="footer-slogan">
           <h2>選擇<span class="exclaim">！</span>本身就是一種真相。</h2>
-          <p>嚴選港台主流與獨立外電，自動過濾官媒及干擾廣告，每小時整點自動同步最新動態。</p>
+          <p>嚴選港台主流與獨立外電，自動過濾官媒及干擾廣告，每 30 分鐘自動同步最新動態。</p>
         </div>
       </div>
 
@@ -259,7 +270,7 @@
         <div class="r-icon-sq r-icon-lg" onclick="handleSecretLogoTap()" title="R! News">R!</div>
         <div class="footer-slogan">
           <h2>選擇<span class="exclaim">！</span>本身就是一種真相。</h2>
-          <p>嚴選港台主流與獨立外電，自動過濾官媒及干擾廣告，每小時整點自動同步最新動態。</p>
+          <p>嚴選港台主流與獨立外電，自動過濾官媒及干擾廣告，每 30 分鐘自動同步最新動態。</p>
         </div>
       </div>
 
@@ -291,7 +302,7 @@
       <div class="footer-bottom">
         <p>本站提供無廣告純文字導讀與重點摘要，相片及影片版權歸原媒體所有。點擊右上角「更新時間按鈕」即可隨時拉取最新同步消息。</p>
         <div class="about-ver-row">
-          <span class="about-ver-tag" id="aboutVerTag">ver 2.5</span>
+          <span class="about-ver-tag" id="aboutVerTag">ver 2.6</span>
         </div>
       </div>
     </div>
@@ -312,9 +323,14 @@
 
   <script>
     const DATA_URL = "https://raw.githubusercontent.com/royleung313-create/r-news/data/news.json";
+    const PAGE_SIZE = 60;
+    const AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
-    let NEWS_STATE = { version: "ver 2.5", updatedAt: "--/-- --:--", fullUpdatedAt: "", sourceStats: [], items: [] };
+    let NEWS_STATE = { version: "ver 2.6", updatedAt: "--/-- --:--", fullUpdatedAt: "", sourceStats: [], items: [] };
     let currentCategory = "全部";
+    let visibleCount = PAGE_SIZE;
+    let lastFetchedAtMs = 0;
+    let isFetching = false;
     let currentModalItem = null;
     let secretTapCount = 0;
     let secretTapTimer = null;
@@ -361,7 +377,11 @@
         if (btn.disabled) return;
         btn.disabled = true;
         btn.innerHTML = "⏳ 同步中...";
+      } else if (isFetching) {
+        return;
       }
+
+      isFetching = true;
 
       try {
         const res = await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
@@ -370,7 +390,10 @@
         if (!data || !Array.isArray(data.items)) throw new Error("Invalid data");
 
         NEWS_STATE = data;
-        const rawVer = (NEWS_STATE.version || "ver 2.5").replace(/^v(?=\d)/i, "ver ");
+        lastFetchedAtMs = Date.now();
+        if (isManual) visibleCount = PAGE_SIZE;
+
+        const rawVer = (NEWS_STATE.version || "ver 2.6").replace(/^v(?=\d)/i, "ver ");
         const aboutVerEl = document.getElementById("aboutVerTag");
         if (aboutVerEl) aboutVerEl.textContent = rawVer;
 
@@ -391,6 +414,16 @@
         if (isManual) {
           btn.disabled = false;
           btn.innerHTML = '🔄 <span class="refresh-label">更新 : </span><span id="updateTime">' + (NEWS_STATE.updatedAt || "--/-- --:--") + '</span>';
+        }
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    function checkSilentAutoRefresh() {
+      if (document.visibilityState === "visible" && lastFetchedAtMs > 0) {
+        if (Date.now() - lastFetchedAtMs >= AUTO_REFRESH_INTERVAL_MS) {
+          fetchLatestNews(false);
         }
       }
     }
@@ -417,14 +450,23 @@
 
     function filterCategory(cat, btnEl) {
       currentCategory = cat;
+      visibleCount = PAGE_SIZE;
       document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
       btnEl.classList.add("active");
       renderCards();
     }
 
+    function loadMoreNews() {
+      visibleCount += PAGE_SIZE;
+      renderCards();
+    }
+
     function renderCards() {
       const grid = document.getElementById("newsGrid");
+      const loadMoreWrap = document.getElementById("loadMoreWrap");
+      const loadMoreBtn = document.getElementById("loadMoreBtn");
       grid.innerHTML = "";
+
       const items = (NEWS_STATE.items || [])
         .filter(item => {
           if (currentCategory === "全部") return true;
@@ -435,10 +477,12 @@
 
       if (items.length === 0) {
         grid.innerHTML = '<div class="state-box">此分類暫時未有最新精選新聞。</div>';
+        if (loadMoreWrap) loadMoreWrap.style.display = "none";
         return;
       }
 
-      items.forEach(item => {
+      const visibleItems = items.slice(0, visibleCount);
+      visibleItems.forEach(item => {
         const card = document.createElement("article");
         card.className = "news-card";
         card.onclick = () => openModal(item);
@@ -464,6 +508,16 @@
         `;
         grid.appendChild(card);
       });
+
+      const remaining = items.length - visibleItems.length;
+      if (loadMoreWrap && loadMoreBtn) {
+        if (remaining > 0) {
+          loadMoreWrap.style.display = "flex";
+          loadMoreBtn.textContent = "👇 載入更多新聞（仲有 " + remaining + " 則）";
+        } else {
+          loadMoreWrap.style.display = "none";
+        }
+      }
     }
 
     function renderModalParagraphs(container, text) {
@@ -644,6 +698,9 @@
       div.textContent = str || "";
       return div.innerHTML;
     }
+
+    document.addEventListener("visibilitychange", checkSilentAutoRefresh);
+    window.addEventListener("focus", checkSilentAutoRefresh);
 
     initTheme();
     fetchLatestNews(false);
