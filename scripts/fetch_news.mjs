@@ -1,8 +1,8 @@
 import fs from "node:fs";
 
-const APP_VERSION = "ver 2.5";
-const MAX_TOTAL_NEWS = 144;
-const MAX_NEWS_AGE_MS = 36 * 60 * 60 * 1000;
+const APP_VERSION = "ver 2.6";
+const MAX_TOTAL_NEWS = 250;
+const MAX_NEWS_AGE_MS = 60 * 60 * 60 * 1000;
 const BREAKING_WINDOW_MS = 8 * 60 * 60 * 1000;
 
 const BLACKLIST_KEYWORDS = [
