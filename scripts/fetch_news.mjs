@@ -1542,11 +1542,20 @@ async function main() {
   markBreakingNewsItems(candidateItems, nowMs);
 
   // 依時間由新至舊排序，並控制各分類上限（防止單一分類霸佔全部 250 個名額）
+  const SIMPLIFIED_CHAR_RE = /[这个们为发对说会过还来时实经进报导显计应机车运铁飞医学党国际贸银产业员资务环气赛选视网软数据电频图标圣诞历缤点岁览节码领专属欢关键动态辆广场现样觉认识问题边丽华东亚联总统议厅馆买卖钱亿万]/g;
+  const isSimplifiedArticle = (title, body) => {
+    const tHits = ((title || "").match(SIMPLIFIED_CHAR_RE) || []).length;
+    if (tHits >= 2) return true;
+    const allHits = (((title || "") + " " + (body || "")).match(SIMPLIFIED_CHAR_RE) || []).length;
+    return allHits >= 4;
+  };
+
   const sortedAll = sortItemsByTimeDesc(candidateItems);
   const finalCatLimits = { "港聞": 85, "國際": 55, "兩岸": 45, "娛樂": 35, "體育": 35 };
   const finalCatCount = {};
   const finalItems = [];
   for (const it of sortedAll) {
+    if (isSimplifiedArticle(it.title, it.body)) continue;
     const c = it.category || "港聞";
     const limit = finalCatLimits[c] || 40;
     if ((finalCatCount[c] || 0) < limit) {
